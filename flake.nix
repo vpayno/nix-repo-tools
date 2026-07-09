@@ -35,7 +35,12 @@
 
         flake_repo_url = "github:vpayno/nix-repo-tools";
 
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [
+            self.overlays.gitWrappers
+          ];
+        };
 
         metadata = {
           homepage = "https://github.com/vpayno/nix-repo-tools";
@@ -75,9 +80,15 @@
 
         ciBundle = pkgs.buildEnv {
           name = "${name}-bundle";
-          paths = [
-          ];
-          buildInputs = with pkgs; [
+          paths =
+            with pkgs;
+            [
+              tig
+            ]
+            ++ [
+              self.packages.${system}.gitWrapped
+            ];
+          nativeBuildInputs = with pkgs; [
             makeWrapper
           ];
           pathsToLink = [
@@ -85,17 +96,7 @@
             "/etc"
           ];
           postBuild = ''
-            extra_bin_paths="${pkgs.lib.makeBinPath toolScripts}"
-            printf "Adding extra bin paths to wrapper scripts: %s\n" "$extra_bin_paths"
-            printf "\n"
-
-            for p in "$out"/bin/*; do
-              if [[ ! -x $p ]]; then
-                continue
-              fi
-              echo wrapProgram "$p" --set PATH "$extra_bin_paths"
-              wrapProgram "$p" --set PATH "$extra_bin_paths"
-            done
+            :
           '';
         };
       in
@@ -104,6 +105,7 @@
 
         packages = rec {
           default = ciBundle;
+          gitWrapped = pkgs.git-wrapped;
         };
 
         apps = rec {
@@ -120,20 +122,27 @@
         };
 
         devShells = {
-          default = pkgs.mkShell rec {
-            packages = with pkgs; [
-              bashInteractive
-              ciBundle
-            ];
+          default = pkgs.mkShell {
+            packages =
+              with pkgs;
+              [
+                bashInteractive
+              ]
+              ++ [
+                ciBundle
+              ];
 
-            shellMotd = ''
+            SHELLMOTD = ''
               Starting ${name}
 
               nix develop .#default shell...
             '';
 
             shellHook = ''
-              ${pkgs.lib.getExe pkgs.cowsay} "${shellMotd}"
+              ${pkgs.lib.getExe pkgs.cowsay} "''${SHELLMOTD}"
+              printf "\n"
+
+              echo $PATH | tr ':' '\n' | grep -i -e nix-repo-tools -e devShell
               printf "\n"
 
               ${pkgs.lib.getExe pkgs.tree} "${ciBundle}"
@@ -142,5 +151,45 @@
           };
         };
       }
-    );
+    )
+    // {
+      overlays = {
+        gitWrappers = final: prev: {
+          git-wrapped = prev.symlinkJoin {
+            name = "git-wrapped";
+            paths = [
+              prev.git
+            ];
+            nativeBuildInputs = [
+              prev.makeWrapper
+            ];
+            postBuild = ''
+              printf "Running postBuild for git-wrapped package.\n"
+              extra_bin_paths="${
+                prev.lib.makeBinPath (
+                  with prev;
+                  [
+                    bash
+                    coreutils
+                    curl
+                    diffutils
+                    less
+                    openssh
+                    openssl
+                    patchutils
+                  ]
+                )
+              }"
+              for prog in $out/bin/*; do
+                if [[ ! -x $prog ]]; then
+                  continue
+                fi
+                echo Running: wrapProgram "$prog" --prefix PATH : "$extra_bin_paths"
+                wrapProgram "$prog" --prefix PATH : "$extra_bin_paths" || exit
+              done
+            '';
+          };
+        };
+      };
+    };
 }
