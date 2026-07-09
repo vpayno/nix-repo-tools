@@ -103,13 +103,13 @@
       {
         formatter = treefmt-conf.formatter.${system};
 
-        packages = rec {
+        packages = {
           default = ciBundle;
           gitWrapped = pkgs.git-wrapped;
         };
 
-        apps = rec {
-          default = usage;
+        apps = {
+          default = self.apps.${system}.usage;
 
           usage = {
             type = "app";
