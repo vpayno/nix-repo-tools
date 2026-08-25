@@ -157,6 +157,8 @@
         gitWrappers = final: prev: {
           git-wrapped = prev.symlinkJoin {
             name = "git-wrapped";
+            pname = "${final.git-wrapped.name}-${prev.git.version}";
+            version = prev.git.version;
             paths = [
               prev.git
             ];
