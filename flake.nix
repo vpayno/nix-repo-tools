@@ -175,7 +175,7 @@
                     diffutils
                     less
                     openssh
-                    openssl
+                    openssl_3_5
                     patchutils
                   ]
                 )
